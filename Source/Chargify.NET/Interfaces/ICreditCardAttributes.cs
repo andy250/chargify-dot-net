@@ -40,5 +40,9 @@ namespace ChargifyNET
         /// Get or set the CVV number on the credit card
         /// </summary>
         string CVV { get; set; }
+
+        string CardType { get; set; }
+
+        string LastFour { get; set; }
     }
 }

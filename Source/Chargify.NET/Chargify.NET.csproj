@@ -160,6 +160,7 @@
     <Compile Include="Json\XmlToJson.cs" />
     <Compile Include="Migration.cs" />
     <Compile Include="PaymentProfileAttributes.cs" />
+    <Compile Include="PayPalAttributes.cs" />
     <Compile Include="Product.cs" />
     <Compile Include="ProductFamily.cs" />
     <Compile Include="ProductFamilyAttributes.cs" />

@@ -86,12 +86,26 @@ namespace ChargifyNET
         /// </summary>
         [XmlElement("cvv")]
         public string CVV { get; set; }
-        /// <summary>
-        /// Ignore, used for determining if the value should be serialized
-        /// </summary>
-        public bool ShouldSerializeCvv()
+
+        [XmlElement("last_four")]
+        public string LastFour { get; set; }
+
+        [XmlElement("card_type ")]
+        public string CardType { get; set; }
+
+        public bool ShouldSerializeCVV()
         {
             return !string.IsNullOrEmpty(CVV);
+        }
+
+        public bool ShouldSerializeCardType()
+        {
+            return !string.IsNullOrEmpty(CardType);
+        }
+
+        public bool ShouldSerializeLastFour()
+        {
+            return !string.IsNullOrEmpty(LastFour);
         }
 
         #endregion
@@ -112,6 +126,10 @@ namespace ChargifyNET
 
             return a.FullNumber == b.FullNumber &&
                    a.CVV == b.CVV &&
+                   a.VaultToken == b.VaultToken &&
+                   a.CurrentVault == b.CurrentVault &&
+                   a.CardType == b.CardType && 
+                   a.LastFour == b.LastFour &&
                    a.ExpirationMonth == b.ExpirationMonth &&
                    a.ExpirationYear == b.ExpirationYear &&
                    a.BillingAddress == b.BillingAddress &&
@@ -144,6 +162,10 @@ namespace ChargifyNET
 
             return a.FullNumber == b.FullNumber &&
                    a.CVV == b.CVV &&
+                   a.VaultToken == b.VaultToken &&
+                   a.CurrentVault == b.CurrentVault &&
+                   a.CardType == b.CardType &&
+                   a.LastFour == b.LastFour &&
                    a.ExpirationMonth == b.ExpirationMonth &&
                    a.ExpirationYear == b.ExpirationYear &&
                    a.BillingAddress == b.BillingAddress &&
@@ -176,6 +198,10 @@ namespace ChargifyNET
 
             return a.FullNumber == b.FullNumber &&
                    a.CVV == b.CVV &&
+                   a.VaultToken == b.VaultToken &&
+                   a.CurrentVault == b.CurrentVault &&
+                   a.CardType == b.CardType &&
+                   a.LastFour == b.LastFour &&
                    a.ExpirationMonth == b.ExpirationMonth &&
                    a.ExpirationYear == b.ExpirationYear &&
                    a.BillingAddress == b.BillingAddress &&

@@ -88,6 +88,8 @@ namespace ChargifyNET
         /// </summary>
         CreditCardAttributes CreditCardAttributes { get; set; }
 
+        PayPalAttributes PayPalAttributes { get; set; }
+
         /// <summary>
         /// (Optional) Can be used when canceling a subscription (via the HTTP 
         /// DELETE method) to make a note about the reason for cancellation.
@@ -411,6 +413,9 @@ namespace ChargifyNET
         /// </summary>
         [XmlElement("credit_card_attributes")]
         public CreditCardAttributes CreditCardAttributes { get; set; }
+
+        [XmlElement("paypal_account_attributes")]
+        public PayPalAttributes PayPalAttributes { get; set; }
 
         /// <summary>
         /// The Payment Profile ID of an existing card or bank account, which belongs 

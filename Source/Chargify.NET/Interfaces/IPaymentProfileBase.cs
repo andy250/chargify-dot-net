@@ -95,5 +95,9 @@ namespace ChargifyNET
         /// Get or set the billing country of the credit card
         /// </summary>
         string BillingCountry { get; set; }
+
+        string VaultToken { get; set; }
+
+        string CurrentVault { get; set; }
     }
 }

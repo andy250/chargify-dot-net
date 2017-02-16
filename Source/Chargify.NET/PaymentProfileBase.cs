@@ -212,6 +212,20 @@ namespace ChargifyNET
             return !string.IsNullOrEmpty(BillingZip);
         }
 
+        [XmlElement("vault_token")]
+        public string VaultToken { get; set; }
+        public bool ShouldSerializeVaultToken()
+        {
+            return !string.IsNullOrEmpty(VaultToken);
+        }
+
+        [XmlElement("current_vault")]
+        public string CurrentVault { get; set; }
+        public bool ShouldSerializeCurrentVault()
+        {
+            return !string.IsNullOrEmpty(CurrentVault);
+        }
+
         /// <summary>
         /// Get or set the billing country of the credit card
         /// </summary>
