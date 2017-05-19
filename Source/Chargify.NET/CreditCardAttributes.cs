@@ -90,7 +90,7 @@ namespace ChargifyNET
         [XmlElement("last_four")]
         public string LastFour { get; set; }
 
-        [XmlElement("card_type ")]
+        [XmlElement("card_type")]
         public string CardType { get; set; }
 
         public bool ShouldSerializeCVV()
