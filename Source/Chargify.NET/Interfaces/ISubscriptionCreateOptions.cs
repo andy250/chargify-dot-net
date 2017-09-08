@@ -27,7 +27,6 @@
 //
 #endregion
 
-// ReSharper disable once CheckNamespace
 namespace ChargifyNET
 {
     #region Imports
@@ -89,6 +88,8 @@ namespace ChargifyNET
         CreditCardAttributes CreditCardAttributes { get; set; }
 
         PayPalAttributes PayPalAttributes { get; set; }
+
+        DeviceData DeviceData { get; set; }
 
         /// <summary>
         /// (Optional) Can be used when canceling a subscription (via the HTTP 
@@ -504,6 +505,13 @@ namespace ChargifyNET
         public bool ShouldSerializeVatNumber()
         {
             return !string.IsNullOrWhiteSpace(VatNumber);
+        }
+
+        [XmlElement("device_data")]
+        public DeviceData DeviceData { get; set; }
+        public bool ShouldSerializeDeviceData()
+        {
+            return DeviceData != null;
         }
 
         //[XmlElement("metafields")]
