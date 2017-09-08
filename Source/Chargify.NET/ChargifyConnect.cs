@@ -1690,7 +1690,7 @@ namespace ChargifyNET
             if (creditCardAttributes == null) throw new ArgumentNullException("creditCardAttributes");
             if (chargifyId == int.MinValue) throw new ArgumentException("Invalid Customer ID detected", "chargifyId");
 
-            return CreateSubscription(new SubscriptionCreateOptions() { ProductHandle = productHandle, CustomerID = chargifyId, CreditCardAttributes = (CreditCardAttributes) creditCardAttributes, NextBillingAt = nextBillingAt });
+            return CreateSubscription(new SubscriptionCreateOptions() { ProductHandle = productHandle, CustomerID = chargifyId, CreditCardAttributes = (CreditCardAttributes)creditCardAttributes, NextBillingAt = nextBillingAt });
         }
 
         /// <summary>
@@ -3330,6 +3330,71 @@ namespace ChargifyNET
             }
         }
 
+        /// <summary>
+        /// This will place the subscription in the on_hold state and it will not renew.
+        /// </summary>
+        /// <param name="subscriptionId">The (chargify) id of the subscription</param>
+        /// <param name="automaticResumeDate">The date the subscription will automatically resume, if applicable</param>
+        /// <returns>The subscription data, if successful</returns>
+        /// <remarks>https://reference.chargify.com/v1/subscriptions/hold-subscription</remarks>
+        public ISubscription PauseSubscription(int subscriptionId, DateTime? automaticResumeDate = null)
+        {
+            if (subscriptionId == int.MinValue) throw new ArgumentNullException("subscriptionId");
+
+            // create XML for creation of customer
+            StringBuilder subscriptionXml = new StringBuilder(GetXmlStringIfApplicable());
+
+            if (automaticResumeDate.HasValue)
+            {
+                subscriptionXml.Append("<hold>");
+                subscriptionXml.AppendFormat("<automatically_resume_at>{0}</automatically_resume_at>", automaticResumeDate.Value.ToString("o"));
+                subscriptionXml.Append("</hold>");
+            }
+            else
+            {
+                subscriptionXml.Clear();
+            }
+
+            try
+            {
+                // now make the request
+                string response = DoRequest(string.Format("subscriptions/{0}/hold.{1}", subscriptionId, GetMethodExtension()), HttpRequestMethod.Post, subscriptionXml.Length > 0 ? subscriptionXml.ToString() : null);
+                // change the response to the object
+                return response.ConvertResponseTo<Subscription>("subscription");
+            }
+            catch (ChargifyException cex)
+            {
+                if (cex.StatusCode == HttpStatusCode.NotFound) throw new InvalidOperationException("Subscription not found");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Resume a paused (on-hold) subscription. If the normal next renewal date has not passed, 
+        /// the subscription will return to active and will renew on that date. Otherwise, it will 
+        /// behave like a reactivation, setting the billing date to 'now' and charging the subscriber.
+        /// </summary>
+        /// <param name="subscriptionId">The (Chargify) id of the subscription</param>
+        /// <returns>The subscription data, if successful</returns>
+        /// <remarks>https://reference.chargify.com/v1/subscriptions/resume-subscription</remarks>
+        public ISubscription ResumeSubscription(int subscriptionId)
+        {
+            if (subscriptionId == int.MinValue) throw new ArgumentNullException("subscriptionId");
+
+            try
+            {
+                // now make the request
+                string response = DoRequest(string.Format("subscriptions/{0}/resume.{1}", subscriptionId, GetMethodExtension()), HttpRequestMethod.Post, string.Empty);
+                // change the response to the object
+                return response.ConvertResponseTo<Subscription>("subscription");
+            }
+            catch (ChargifyException cex)
+            {
+                if (cex.StatusCode == HttpStatusCode.NotFound) throw new InvalidOperationException("Subscription not found");
+                throw;
+            }
+        }
+
         #endregion
 
         #region Subscription Override
@@ -3492,6 +3557,166 @@ namespace ChargifyNET
                 if (cex.StatusCode == HttpStatusCode.NotFound) return null;
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Method for retrieving information about a coupon using the ID of that coupon.
+        /// </summary>
+        /// <param name="ProductFamilyID">The ID of the product family that the coupon belongs to</param>
+        /// <returns>A dictionary of objects if found, empty collection otherwise.</returns>
+        public IDictionary<int, ICoupon> GetAllCoupons(int ProductFamilyID)
+        {
+            var coupons = new Dictionary<int, ICoupon>();
+
+            try
+            {
+                // make sure data is valid
+                if (ProductFamilyID < 0) throw new ArgumentException("Invalid ProductFamilyID");
+                // now make the request
+                string response = this.DoRequest(string.Format("product_families/{0}/coupons.{1}", ProductFamilyID, GetMethodExtension()));
+
+                if (response.IsXml())
+                {
+                    // now build a product list based on response XML
+                    XmlDocument doc = new XmlDocument();
+                    doc.LoadXml(response); // get the XML into an XML document
+                    if (doc.ChildNodes.Count == 0) throw new InvalidOperationException("Returned XML not valid");
+                    // loop through the child nodes of this node
+
+                    foreach (XmlNode elementNode in doc.ChildNodes)
+                    {
+                        if (elementNode.Name == "coupons")
+                        {
+                            foreach (XmlNode couponNode in elementNode.ChildNodes)
+                            {
+                                if (couponNode.Name == "coupon")
+                                {
+                                    ICoupon LoadedCoupon = new Coupon(couponNode);
+                                    if (!coupons.ContainsKey(LoadedCoupon.ID))
+                                    {
+                                        coupons.Add(LoadedCoupon.ID, LoadedCoupon);
+                                    }
+                                    else
+                                    {
+                                        throw new InvalidOperationException("Duplicate Coupon ID values detected");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (response.IsJSON())
+                {
+                    // should be expecting an array
+                    int position = 0;
+                    JsonArray array = JsonArray.Parse(response, ref position);
+                    for (int i = 0; i <= array.Length - 1; i++)
+                    {
+                        if ((array.Items[i] as JsonObject).ContainsKey("coupon"))
+                        {
+                            JsonObject couponObj = (array.Items[i] as JsonObject)["coupon"] as JsonObject;
+                            ICoupon loadedCooupon = new Coupon(couponObj);
+                            if (!coupons.ContainsKey(loadedCooupon.ID))
+                            {
+                                coupons.Add(loadedCooupon.ID, loadedCooupon);
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException("Duplicate Coupon ID values detected");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (ChargifyException cex)
+            {
+                // Throw if anything but not found, since not found is telling us that it's working correctly
+                // but that there just isn't a coupon with that ID.
+                if (cex.StatusCode == HttpStatusCode.NotFound) return null;
+                throw cex;
+            }
+
+            return coupons;
+        }
+
+        /// <summary>
+        /// Method for retrieving information about a coupon usage using the ID of that coupon.
+        /// </summary>
+        /// <param name="CouponID">The ID of the coupon</param>
+        /// <returns>The object if found, null otherwise.</returns>
+        public IDictionary<int, ICouponUsage> GetCouponUsage(int CouponID)
+        {
+            var coupons = new Dictionary<int, ICouponUsage>();
+
+            try
+            {
+                // make sure data is valid
+                if (CouponID < 0) throw new ArgumentException("Invalid CouponID");
+                // now make the request
+                string response = this.DoRequest(string.Format("coupons/{0}/usage.{1}", CouponID, GetMethodExtension()));
+
+                if (response.IsXml())
+                {
+                    // now build a product list based on response XML
+                    XmlDocument doc = new XmlDocument();
+                    doc.LoadXml(response); // get the XML into an XML document
+                    if (doc.ChildNodes.Count == 0) throw new InvalidOperationException("Returned XML not valid");
+                    // loop through the child nodes of this node
+
+                    foreach (XmlNode elementNode in doc.ChildNodes)
+                    {
+                        if (elementNode.Name == "objects")
+                        {
+                            foreach (XmlNode couponNode in elementNode.ChildNodes)
+                            {
+                                if (couponNode.Name == "object")
+                                {
+                                    ICouponUsage LoadedCoupon = new CouponUsage(couponNode);
+                                    if (!coupons.ContainsKey(LoadedCoupon.ProductId))
+                                    {
+                                        coupons.Add(LoadedCoupon.ProductId, LoadedCoupon);
+                                    }
+                                    else
+                                    {
+                                        throw new InvalidOperationException("Duplicate Product ID values detected");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (response.IsJSON())
+                {
+                    // should be expecting an array
+                    int position = 0;
+                    JsonArray array = JsonArray.Parse(response, ref position);
+                    for (int i = 0; i <= array.Length - 1; i++)
+                    {
+                        if ((array.Items[i] as JsonObject).ContainsKey("name"))
+                        {
+                            JsonObject couponUsageObj = (array.Items[i] as JsonObject) as JsonObject;
+                            ICouponUsage loadedCoouponUsage = new CouponUsage(couponUsageObj);
+                            if (!coupons.ContainsKey(loadedCoouponUsage.ProductId))
+                            {
+                                coupons.Add(loadedCoouponUsage.ProductId, loadedCoouponUsage);
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException("Duplicate Coupon ID values detected");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (ChargifyException cex)
+            {
+                // Throw if anything but not found, since not found is telling us that it's working correctly
+                // but that there just isn't a coupon with that ID.
+                if (cex.StatusCode == HttpStatusCode.NotFound) return null;
+                throw cex;
+            }
+
+            return coupons;
         }
 
         /// <summary>
@@ -3765,6 +3990,7 @@ namespace ChargifyNET
         /// <param name="componentId">The ID of the component</param>
         /// <param name="newAllocatedQuantity">The amount of component to allocate to the subscription</param>
         /// <returns>The ComponentAttributes object with UnitBalance filled in, null otherwise.</returns>
+        [Obsolete("Use CreateComponentAllocation() Instead")]
         public IComponentAttributes UpdateComponentAllocationForSubscription(int subscriptionId, int componentId, int newAllocatedQuantity)
         {
             // make sure data is valid
@@ -4053,6 +4279,7 @@ namespace ChargifyNET
         /// <param name="componentId">The ID of the component (on/off only) to modify</param>
         /// <param name="setEnabled">True if wanting to turn the component "on", false otherwise.</param>
         /// <returns>IComponentAttributes object if successful, null otherwise.</returns>
+        [Obsolete("Use CreateComponentAllocation() Instead")]
         public IComponentAttributes SetComponent(int subscriptionId, int componentId, bool setEnabled)
         {
             try
@@ -4353,7 +4580,7 @@ namespace ChargifyNET
         /// <returns>The dictionary of transaction records if successful, otherwise null.</returns>
         public IDictionary<int, ITransaction> GetTransactionList(int page, int perPage, List<TransactionType> kinds, int sinceId, int maxId, bool descending = true)
         {
-            return GetTransactionList(page, perPage, kinds, sinceId, maxId, DateTime.MinValue, DateTime.MinValue,descending);
+            return GetTransactionList(page, perPage, kinds, sinceId, maxId, DateTime.MinValue, DateTime.MinValue, descending);
         }
 
         /// <summary>
@@ -4393,7 +4620,8 @@ namespace ChargifyNET
             if (maxId != int.MinValue) { if (qs.Length > 0) { qs += "&"; } qs += string.Format("max_id={0}", maxId); }
             if (sinceDate != DateTime.MinValue) { if (qs.Length > 0) { qs += "&"; } qs += string.Format("since_date={0}", sinceDate.ToString(DateTimeFormat)); }
             if (untilDate != DateTime.MinValue) { if (qs.Length > 0) { qs += "&"; } qs += string.Format("until_date={0}", untilDate.ToString(DateTimeFormat)); }
-            if (qs.Length > 0) { qs += "&"; } qs += "direction=" + (descending ? "desc" : "asc");
+            if (qs.Length > 0) { qs += "&"; }
+            qs += "direction=" + (descending ? "desc" : "asc");
 
             // Construct the url to access Chargify
             string url = string.Format("transactions.{0}", GetMethodExtension());
@@ -5483,6 +5711,31 @@ namespace ChargifyNET
         }
         #endregion
 
+        #region Referral Code
+
+        /// <summary>
+        /// Method for retrieving information about a coupon using the ID of that referral code.
+        /// </summary>
+        /// <param name="ReferralCode">Referral code</param>
+        /// <returns>The object if found, null otherwise.</returns>
+        public IReferralCode ValidateReferralCode(string ReferralCode)
+        {
+            try
+            {
+                string response = this.DoRequest(string.Format("referral_codes/validate.{0}?code={1}", GetMethodExtension(), ReferralCode));
+                // change the response to the object
+                return response.ConvertResponseTo<ReferralCode>("referral-code");
+            }
+            catch (ChargifyException cex)
+            {
+                // Throw if anything but not found, since not found is telling us that it's working correctly
+                // but that there just isn't a referral code with that code.
+                if (cex.StatusCode == HttpStatusCode.NotFound) return null;
+                throw cex;
+            }
+        }
+        #endregion
+
         #region Utility Methods
         private Dictionary<int, T> GetListedJsonResponse<T>(string key, string response)
             where T : class, IChargifyEntity
@@ -5498,7 +5751,7 @@ namespace ChargifyNET
                 if (jsonObject != null && jsonObject.ContainsKey(key))
                 {
                     JsonObject jsonObj = (array.Items[i] as JsonObject)[key] as JsonObject;
-                    T value = (T) Activator.CreateInstance(typeof(T), jsonObj);
+                    T value = (T)Activator.CreateInstance(typeof(T), jsonObj);
                     if (!retValue.ContainsKey(value.ID))
                     {
                         retValue.Add(value.ID, value);
@@ -5532,7 +5785,7 @@ namespace ChargifyNET
                     {
                         if (childNode.Name == key)
                         {
-                            T value = (T) Activator.CreateInstance(typeof(T), childNode);
+                            T value = (T)Activator.CreateInstance(typeof(T), childNode);
                             if (!retValue.ContainsKey(value.ID))
                             {
                                 retValue.Add(value.ID, value);
@@ -5610,7 +5863,7 @@ namespace ChargifyNET
             Uri address = uriBuilder.Uri;
 
             // Create the web request
-            HttpWebRequest request = (HttpWebRequest) WebRequest.Create(address);
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(address);
             request.Timeout = 180000;
             string credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes(apiKey + ":" + Password));
             request.Headers[HttpRequestHeader.Authorization] = "Basic " + credentials;
@@ -5705,7 +5958,7 @@ namespace ChargifyNET
                 // build exception and set last response
                 if (wex.Response != null)
                 {
-                    using (HttpWebResponse errorResponse = (HttpWebResponse) wex.Response)
+                    using (HttpWebResponse errorResponse = (HttpWebResponse)wex.Response)
                     {
                         newException = new ChargifyException(errorResponse, wex, postData);
                         _lastResponse = errorResponse;
@@ -5763,7 +6016,7 @@ namespace ChargifyNET
             Uri address = uriBuilder.Uri;
 
             // Create the web request
-            HttpWebRequest request = (HttpWebRequest) WebRequest.Create(address);
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(address);
             request.Timeout = _timeout;
             string credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes(apiKey + ":" + Password));
             request.Headers[HttpRequestHeader.Authorization] = "Basic " + credentials;
@@ -5848,7 +6101,7 @@ namespace ChargifyNET
                 // build exception and set last response
                 if (wex.Response != null)
                 {
-                    using (HttpWebResponse errorResponse = (HttpWebResponse) wex.Response)
+                    using (HttpWebResponse errorResponse = (HttpWebResponse)wex.Response)
                     {
                         newException = new ChargifyException(errorResponse, wex, postData);
                         _lastResponse = errorResponse;
